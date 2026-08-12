@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueueMate - Smart College Queue Management</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">QueueMate</div>
+    <nav>
+      <button class="nav-btn active" data-page="studentPage">Student App</button>
+      <button class="nav-btn" data-page="adminPage">Admin Dashboard</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- STUDENT APP -->
+    <section id="studentPage" class="page active-page">
+      <div class="hero">
+        <h1>Smart College Queue Management System</h1>
+        <p>Get a digital token and avoid waiting in long queues.</p>
+      </div>
+
+      <div class="student-layout">
+        <div class="phone">
+          <div class="phone-top"></div>
+
+          <div id="loginScreen" class="screen">
+            <h2>Student Login</h2>
+            <input id="loginId" placeholder="Email / Roll Number">
+            <input id="loginPassword" type="password" placeholder="Password">
+            <button class="primary" onclick="login()">Login</button>
+            <p class="small">Don't have an account? <button class="link-btn" onclick="showScreen('registerScreen')">Register</button></p>
+          </div>
+
+          <div id="registerScreen" class="screen hidden">
+            <h2>Student Registration</h2>
+            <input id="registerName" placeholder="Full Name">
+            <input id="registerId" placeholder="Email / Roll Number">
+            <input id="registerPassword" type="password" placeholder="Create Password">
+            <input id="registerConfirm" type="password" placeholder="Confirm Password">
+            <button class="primary" onclick="registerStudent()">Create Account</button>
+            <p class="small">Already registered? <button class="link-btn" onclick="showScreen('loginScreen')">Login</button></p>
+          </div>
+
+          <div id="serviceScreen" class="screen hidden">
+            <div class="screen-title">Select Service</div>
+            <div id="services"></div>
+          </div>
+
+          <div id="tokenScreen" class="screen hidden">
+            <div class="success-icon">✓</div>
+            <h2>Token Generated</h2>
+            <div class="token-card">
+              <span>Your Token Number</span>
+              <strong id="tokenNumber">A27</strong>
+              <span id="tokenService">Certificates</span>
+              <span>Estimated Waiting Time</span>
+              <b id="waitTime">25 - 30 mins</b>
+            </div>
+            <button class="primary" onclick="showStatus()">View Status</button>
+          </div>
+
+          <div id="statusScreen" class="screen hidden">
+            <div class="screen-title">My Token Status</div>
+            <div class="status-box">
+              <span>Your Token</span><strong id="myToken">A27</strong>
+            </div>
+            <div class="status-box"><span>Now Serving</span><strong id="nowServing">A20</strong></div>
+            <div class="status-box"><span>You are</span><strong id="tokensAway">7</strong><small>tokens away</small></div>
+            <div class="status-box"><span>Estimated Waiting Time</span><strong id="statusWait">25 - 30 mins</strong></div>
+            <button class="danger" onclick="leaveQueue()">Leave Queue</button>
+            <button class="link-btn" onclick="showScreen('serviceScreen')">← Back</button>
+          </div>
+
+          <div id="historyScreen" class="screen hidden">
+            <div class="screen-title">My History</div>
+            <div id="historyList"></div>
+            <button class="primary" onclick="showScreen('serviceScreen')">Back to Home</button>
+          </div>
+        </div>
+
+        <div class="student-info">
+          <h2>Student Flow</h2>
+          <ol>
+            <li>Login to the app.</li>
+            <li>Select the required service.</li>
+            <li>Get a digital token.</li>
+            <li>View real-time queue status.</li>
+            <li>View completed service history.</li>
+          </ol>
+
+          <h2>Features</h2>
+          <ul class="features">
+            <li>✓ Digital Token</li>
+            <li>✓ Real-time Queue Status</li>
+            <li>✓ Estimated Waiting Time</li>
+            <li>✓ History</li>
+            <li>✓ QR Code Access</li>
+          </ul>
+
+          <div class="qr-access">
+            <h2>Scan to Use the App</h2>
+            <p>Students can scan this QR code with their phone camera to open QueueMate.</p>
+            <div class="qr-box">
+              <img id="appQrCode" alt="QueueMate access QR code">
+            </div>
+            <label class="qr-label" for="appUrl">App URL</label>
+            <input id="appUrl" class="qr-url" type="url" placeholder="https://your-deployed-app-url.com">
+            <button class="primary qr-button" onclick="updateQrCode()">Update QR Code</button>
+            <p class="small">After deployment, enter your public app URL here and print/display this QR code at the college.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN DASHBOARD -->
+    <section id="adminPage" class="page">
+      <div class="dashboard-header">
+        <div>
+          <h1>Admin Dashboard</h1>
+          <p>Monitor and manage college queues.</p>
+        </div>
+        <button class="primary" onclick="callNextToken()">Call Next Token</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>Total Services</span><strong id="totalServices">6</strong></div>
+        <div class="stat"><span>Total Tokens Today</span><strong id="totalTokens">0</strong></div>
+        <div class="stat"><span>Serving Now</span><strong id="adminNow">A20</strong></div>
+        <div class="stat"><span>Completed</span><strong id="completed">0</strong></div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="panel">
+          <h3>Live Queue</h3>
+          <div class="serving"><span>Now Serving</span><strong id="liveServing">A20</strong></div>
+          <h4>Upcoming Tokens</h4>
+          <div id="upcomingTokens" class="token-list"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Queue List</h3>
+          <table>
+            <thead>
+              <tr><th>Token</th><th>Service</th><th>Status</th><th>Time</th></tr>
+            </thead>
+            <tbody id="queueTable"></tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h3>Service Management</h3>
+          <div id="serviceManagement"></div>
+        </div>
+
+        <div class="panel">
+          <h3>Admin Features</h3>
+          <ul class="admin-features">
+            <li>🔒 View live queue</li>
+            <li>📣 Call next token</li>
+            <li>⚙️ Manage services</li>
+            <li>📊 View history / reports</li>
+            <li>📈 Monitor analytics</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
