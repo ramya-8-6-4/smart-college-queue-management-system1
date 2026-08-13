@@ -11,9 +11,93 @@ let queue = JSON.parse(localStorage.getItem("queueData")) || [
 ];
 
 let history = JSON.parse(localStorage.getItem("historyData")) || [];
-let currentToken = null;
+let currentToken = localStorage.getItem("currentToken") || null;
 let currentName = "";
 let users = JSON.parse(localStorage.getItem("queueUsers")) || [];
+let currentUserId = localStorage.getItem("currentUserId") || "";
+let syncTimer = null;
+let syncBusy = false;
+const API_BASE = location.protocol.startsWith("http") ? "/api" : null;
+const HAS_SHARED_SERVER = !!API_BASE;
+
+function saveCurrentSession(){
+  if(currentToken) localStorage.setItem("currentToken", currentToken);
+  else localStorage.removeItem("currentToken");
+  if(currentUserId) localStorage.setItem("currentUserId", currentUserId);
+}
+
+async function serverRequest(method, path, body){
+  if(!HAS_SHARED_SERVER) return null;
+  try{
+    const res = await fetch(API_BASE + path, {
+      method,
+      headers: body ? {"Content-Type":"application/json"} : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      cache:"no-store"
+    });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  }catch(e){
+    return null;
+  }
+}
+
+async function loadSharedState(showRefresh=false){
+  if(!HAS_SHARED_SERVER || syncBusy) return false;
+  syncBusy = true;
+  try{
+    const data = await serverRequest("GET","/state");
+    if(!data || !Array.isArray(data.queue)) return false;
+    queue = data.queue;
+    history = Array.isArray(data.history) ? data.history : [];
+    localStorage.setItem("queueData", JSON.stringify(queue));
+    localStorage.setItem("historyData", JSON.stringify(history));
+
+    // Reconnect the logged-in student to their token after an admin update/reload.
+    if(currentUserId){
+      const mine = queue.find(x => x.ownerId === currentUserId &&
+        !["Completed","Cancelled"].includes(x.status));
+      if(mine) currentToken = mine.token;
+    }
+    renderDashboard();
+    if(currentToken) refreshStudentStatus();
+    if(showRefresh) toast("Queue updated.");
+    return true;
+  }finally{
+    syncBusy = false;
+  }
+}
+
+async function pushSharedState(){
+  if(!HAS_SHARED_SERVER) return;
+  await serverRequest("POST","/state", {queue, history});
+}
+
+function refreshStudentStatus(){
+  if(!currentToken) return;
+  const item = queue.find(x=>x.token===currentToken);
+  if(!item) return;
+
+  const serving = queue.find(x=>x.status==="Serving");
+  const servingIndex = serving ? queue.indexOf(serving) : -1;
+  const myIndex = queue.findIndex(x=>x.token===currentToken);
+
+  document.getElementById("myToken").textContent = currentToken;
+  document.getElementById("nowServing").textContent = serving?.token || "—";
+
+  if(item.status === "Completed"){
+    document.getElementById("tokensAway").textContent = "Completed";
+    document.getElementById("statusWait").textContent = "0 mins";
+    return;
+  }
+
+  const away = servingIndex >= 0
+    ? Math.max(0, myIndex - servingIndex - (item.status==="Serving" ? 0 : 1))
+    : Math.max(0, myIndex);
+  document.getElementById("tokensAway").textContent = away;
+  document.getElementById("statusWait").textContent =
+    calculateEstimatedWait(away, 5);
+}
 
 
 /* ================= QUEUE POSITION / WAIT TIME =================
@@ -142,7 +226,7 @@ function renderServices(){
   ).join("");
 }
 
-function login(){
+async function login(){
   const id = document.getElementById("loginId").value.trim().toLowerCase();
   const password = document.getElementById("loginPassword").value;
 
@@ -158,7 +242,17 @@ function login(){
   }
 
   currentName = user.name;
-  showScreen("serviceScreen");
+  currentUserId = user.id;
+  localStorage.setItem("currentUserId", currentUserId);
+  const existing = queue.find(x => x.ownerId === currentUserId &&
+    !["Completed","Cancelled"].includes(x.status));
+  if(existing){
+    currentToken = existing.token;
+    saveCurrentSession();
+  }
+  await loadSharedState();
+  showScreen(existing ? "statusScreen" : "serviceScreen");
+  if(existing) refreshStudentStatus();
   toast("Welcome, " + currentName + "!");
 }
 
@@ -167,16 +261,20 @@ function showScreen(id){
   document.getElementById(id).classList.remove("hidden");
 }
 
-function getToken(service){
-  const number = queue.length + 1;
+async function getToken(service){
+  await loadSharedState();
+  const used = queue.map(x => tokenNumber(x.token)).filter(Number.isFinite);
+  const number = (used.length ? Math.max(...used) : 0) + 1;
   const token = "A" + String(number).padStart(2,"0");
   const now = new Date();
   const time = now.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
   const waiting = queue.filter(x=>x.status==="Waiting").length;
   currentToken = token;
 
-  queue.push({token,service,status:"Waiting",time,owner:currentName});
+  queue.push({token,service,status:"Waiting",time,owner:currentName,ownerId:currentUserId});
+  saveCurrentSession();
   saveData();
+  await pushSharedState();
 
   document.getElementById("tokenNumber").textContent = token;
   document.getElementById("tokenService").textContent = service;
@@ -189,23 +287,17 @@ function getToken(service){
 function showStatus(){
   const item = queue.find(x=>x.token===currentToken);
   if(!item) return;
-
-  const servingIndex = queue.findIndex(x=>x.status==="Serving");
-  const myIndex = queue.findIndex(x=>x.token===currentToken);
-  const away = Math.max(0, myIndex - servingIndex);
-
-  document.getElementById("myToken").textContent = currentToken;
-  document.getElementById("nowServing").textContent = queue[servingIndex]?.token || "A20";
-  document.getElementById("tokensAway").textContent = away;
-  document.getElementById("statusWait").textContent = `${away*5} - ${away*5+5} mins`;
+  refreshStudentStatus();
   showScreen("statusScreen");
 }
 
-function leaveQueue(){
+async function leaveQueue(){
   if(!currentToken) return;
   queue = queue.filter(x=>x.token!==currentToken);
   saveData();
+  await pushSharedState();
   currentToken=null;
+  saveCurrentSession();
   toast("You left the queue.");
   showScreen("serviceScreen");
   renderDashboard();
@@ -240,7 +332,8 @@ function renderDashboard(){
   }).join("");
 }
 
-function callNextToken(){
+async function callNextToken(){
+  await loadSharedState();
   const serving=queue.find(x=>x.status==="Serving");
   if(serving){
     serving.status="Completed";
@@ -254,7 +347,9 @@ function callNextToken(){
     toast("No waiting tokens.");
   }
   saveData();
+  await pushSharedState();
   renderDashboard();
+  refreshStudentStatus();
 }
 
 function removeService(name){
@@ -469,7 +564,18 @@ const QRLocal = (() => {
 
 function getDefaultAppUrl(){
   const saved = localStorage.getItem("queueAppUrl");
-  return saved || "https://ramya-8-6-4.github.io/smart-college-queue-management-system1/";
+  if(saved) return saved;
+  // When using the shared local server, the QR must point phones to this
+  // computer's LAN address. GitHub Pages cannot share local queue state.
+  if(location.protocol === "http:" && location.hostname !== "localhost" &&
+     location.hostname !== "127.0.0.1"){
+    return location.origin + "/";
+  }
+  if(location.protocol === "http:" || location.protocol === "https:"){
+    if(location.hostname === "localhost" || location.hostname === "127.0.0.1")
+      return location.origin + "/";
+  }
+  return "https://ramya-8-6-4.github.io/smart-college-queue-management-system1/";
 }
 
 function updateQrCode(){
@@ -537,6 +643,12 @@ renderDashboard();
 
 // Initialize QR immediately when the page loads.
 initializeQrCode();
+
+if(HAS_SHARED_SERVER){
+  // Poll the shared server so the student's phone updates when admin calls next.
+  loadSharedState();
+  syncTimer = setInterval(() => loadSharedState(false), 1000);
+}
 
 function updateQrCode(){ toast("This QR code is ready to use. It opens the QueueMate app URL shown above."); }
 
