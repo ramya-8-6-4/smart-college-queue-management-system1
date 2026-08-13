@@ -104,13 +104,11 @@
           <div class="qr-access">
             <h2>Scan to Use the App</h2>
             <p>Students can scan this QR code with their phone camera to open QueueMate.</p>
-            <div class="qr-box">
-              <img id="appQrCode" alt="QueueMate access QR code">
-            </div>
+            <div class="qr-box" id="appQrCode" aria-label="QueueMate access QR code"><img src="queue_app_qr.png" alt="QueueMate access QR code" width="220" height="220"></div>
             <label class="qr-label" for="appUrl">App URL</label>
-            <input id="appUrl" class="qr-url" type="url" placeholder="https://your-deployed-app-url.com">
+            <input id="appUrl" class="qr-url" type="url" placeholder="https://ramya-8-6-4.github.io/smart-college-queue-management-system1/" value="https://ramya-8-6-4.github.io/smart-college-queue-management-system1/">
             <button class="primary qr-button" onclick="updateQrCode()">Update QR Code</button>
-            <p class="small">After deployment, enter your public app URL here and print/display this QR code at the college.</p>
+            <p class="small">This QR code is ready to print and scan. It opens the public QueueMate app URL shown above.</p>
           </div>
         </div>
       </div>
@@ -171,7 +169,6 @@
   </main>
 
   <div id="toast"></div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
